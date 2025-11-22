@@ -91,13 +91,21 @@ public class AccountController : Controller
             {
                 conn.Open();
 
-                string query = "INSERT INTO Users (Name, Phone, Password, CreatedAt) VALUES (@Name, @Phone, @Password, NOW())";
+                string ProfilePic = null;
+                string Role = "User";
+                string GoogleId = null;
+
+
+                string query = "INSERT INTO Users (Name, Phone, Password, ProfilePic, Role, GoogleId, CreatedAt) VALUES (@Name, @Phone, @Password, @ProfilePic, @Role, @GoogleId, NOW())";
 
                 using (var cmd = new MySqlCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@Name", Name);
                     cmd.Parameters.AddWithValue("@Phone", Phone);
                     cmd.Parameters.AddWithValue("@Password", Password);
+                    cmd.Parameters.AddWithValue("@ProfilePic", ProfilePic);
+                    cmd.Parameters.AddWithValue("@Role", Role);
+                    cmd.Parameters.AddWithValue("@GoogleId", GoogleId);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -107,7 +115,7 @@ public class AccountController : Controller
         }
         catch
         {
-            return RedirectToAction("Signup", "Home");
+            return RedirectToAction("Home", "Home");
         }
     }
 
@@ -116,94 +124,96 @@ public class AccountController : Controller
     // LOGIN (NORMAL EMAIL/PASSWORD)
     // ==========================================
     [HttpPost]
-public async Task<IActionResult> Signin(string Phone, string Password)
-{
-    using (var conn = new MySqlConnection(connectionString))
+    public async Task<IActionResult> Signin(string Phone, string Password)
     {
-        conn.Open();
-
-        string query = "SELECT Name, ProfilePic, Password, GoogleId, Role FROM Users WHERE Phone = @Phone";
-
-        using (var cmd = new MySqlCommand(query, conn))
-        {
-            cmd.Parameters.AddWithValue("@Phone", Phone);
-
-            using (var reader = cmd.ExecuteReader())
+        try
             {
-                if (!reader.Read())
+                using (var conn = new MySqlConnection(connectionString))
                 {
-                    TempData["ErrorMessage"] = "Phone number not found!";
-                    return RedirectToAction("Signin", "Home");
-                }
+                    conn.Open();
 
-                if (reader["Password"].ToString() != Password)
-                {
-                    TempData["ErrorMessage"] = "Incorrect password!";
-                    return RedirectToAction("Signin", "Home");
-                }
+                    string query = "SELECT Name, ProfilePic, Password, GoogleId, Role FROM Users WHERE Phone = @Phone";
 
-                // VALUES
-                string name = reader["Name"].ToString() ?? "";
-                string dbPic = reader["ProfilePic"]?.ToString();
-                string googleId = reader["GoogleId"]?.ToString();
-                string role = reader["Role"]?.ToString() ?? "User";
+                    using (var cmd = new MySqlCommand(query, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Phone", Phone);
 
-                string profilePic;
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            if (!reader.Read())
+                            {
+                                TempData["ErrorMessage"] = "Phone number not found!";
+                                return RedirectToAction("Signin", "Home");
+                            }
 
-                if (!string.IsNullOrEmpty(googleId) && !string.IsNullOrEmpty(dbPic))
-                {
-                    profilePic = dbPic; // Google pic saved in DB
-                }
-                else
-                {
-                    // Normal user fallback
-                    profilePic = !string.IsNullOrEmpty(dbPic)
-                        ? dbPic
-                        : "https://img.freepik.com/premium-vector/default-avatar-profile-icon-social-media-user-image-gray-avatar-icon-blank-profile-silhouette-vector-illustration_561158-3407.jpg";
-                }
+                            if (reader["Password"].ToString() != Password)
+                            {
+                                TempData["ErrorMessage"] = "Incorrect password!";
+                                return RedirectToAction("Signin", "Home");
+                            }
+
+                            // VALUES
+                            string name = reader["Name"].ToString() ?? "";
+                            string dbPic = reader["ProfilePic"]?.ToString();
+                            string googleId = reader["GoogleId"]?.ToString();
+                            string role = reader["Role"]?.ToString() ?? "User";
+
+                            string profilePic;
+
+                            if (!string.IsNullOrEmpty(googleId) && !string.IsNullOrEmpty(dbPic))
+                            {
+                                profilePic = dbPic; // Google pic saved in DB
+                            }
+                            else
+                            {
+                                // Normal user fallback
+                                profilePic = !string.IsNullOrEmpty(dbPic)
+                                    ? dbPic
+                                    : "https://img.freepik.com/premium-vector/default-avatar-profile-icon-social-media-user-image-gray-avatar-icon-blank-profile-silhouette-vector-illustration_561158-3407.jpg";
+                            }
 
 
-                // SET SESSION
-                HttpContext.Session.SetString("Phone", Phone);
-                HttpContext.Session.SetString("Name", name);
-                HttpContext.Session.SetString("ProfilePic", profilePic);
-                HttpContext.Session.SetString("Role", role);
+                            // SET SESSION
+                            HttpContext.Session.SetString("Phone", Phone);
+                            HttpContext.Session.SetString("Name", name);
+                            HttpContext.Session.SetString("ProfilePic", profilePic);
+                            HttpContext.Session.SetString("Role", role);
 
-                TempData["SuccessMessage"] = "Welcome back!";
+                            TempData["SuccessMessage"] = "Welcome back!";
 
-                // ================
-                //   SET CLAIMS  
-                // ================
-                var claims = new List<Claim>
-                {
-                    new Claim(ClaimTypes.Name, name),
-                    new Claim("picture", profilePic),
-                    new Claim(ClaimTypes.Role, role)
-                };
+                            // ================
+                            //   SET CLAIMS  
+                            // ================
+                            var claims = new List<Claim>
+                            {
+                                new Claim(ClaimTypes.Name, name),
+                                new Claim("picture", profilePic),
+                                new Claim(ClaimTypes.Role, role)
+                            };
 
-                await HttpContext.SignInAsync(
-                    CookieAuthenticationDefaults.AuthenticationScheme,
-                    new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme))
-                );
+                            await HttpContext.SignInAsync(
+                                CookieAuthenticationDefaults.AuthenticationScheme,
+                                new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme))
+                            );
 
-                 if (role == "Admin")
-                {
-                    return RedirectToAction("AdminHomePage", "Admin");
-                }
-                else
-                {
-                    return RedirectToAction("Index", "Dashboard");
-                }
-        }
-        
+                            if (role == "Admin")
+                            {
+                                return RedirectToAction("AdminHomePage", "Admin");
+                            }
+                            else
+                            {
+                                return RedirectToAction("Index", "Dashboard");
+                            }
+                        }
+                    }
+                }   
+            } 
+            catch
+            {
+                
+                return Ok(new { message = "Database not connected"});
+            }
     }
 
-    
 }
 
-
-}
-
-
-
-}
